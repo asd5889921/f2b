@@ -6,7 +6,7 @@
 
 ### 🚀 Quick Install
 ```bash
-bash <(curl -sL https://raw.githubusercontent.com/asd5889921/f2b/main/enhanced_f2b.sh)
+bash <(curl -sL https://raw.githubusercontent.com/asd5889921/f2b/main/enhanced_f2b_custom.sh)
 ```
 
 ### 📋 Features
@@ -16,6 +16,9 @@ bash <(curl -sL https://raw.githubusercontent.com/asd5889921/f2b/main/enhanced_f
 - Automatic service management
 - Real-time monitoring
 - IP management tools
+- Custom ban settings
+- IP whitelist support
+- Manual IP ban/unban
 
 ### 🔧 Supported Systems
 - Debian
@@ -26,33 +29,38 @@ bash <(curl -sL https://raw.githubusercontent.com/asd5889921/f2b/main/enhanced_f
 
 ### 📦 Functions
 1. Install/Reconfigure Fail2ban
-2. View Fail2ban Status
-3. Unban Specific IP
-4. View Ban Logs
-5. Auto-start on Boot
+2. Custom Configuration
+3. View Fail2ban Status
+4. Unban Specific IP
+5. Manual IP Ban
+6. View Ban Logs
+7. Auto-start on Boot
 
-### ⚙️ Default Configuration
-- Ban Time: 1 hour
-- Find Time: 10 minutes
-- Max Retry: 3 times
+### ⚙️ Customizable Settings
+- SSH Port: Auto-detect or manual input
+- Ban Time: Customizable (default: 1 hour)
+- Find Time: Customizable (default: 10 minutes)
+- Max Retry: Customizable (default: 3 times)
+- IP Whitelist: Support multiple IPs
 - Auto-ignore local network
 
 ### 📝 Notes
 - Requires root privileges
 - Automatically backs up existing configuration
 - Supports automatic system log path recognition
+- Supports custom IP ban/unban
 
 ### 💡 Alternative Installation Methods
 
 1. One-line command:
 ```bash
-bash <(curl -sL https://raw.githubusercontent.com/asd5889921/f2b/main/enhanced_f2b.sh)
+bash <(curl -sL https://raw.githubusercontent.com/asd5889921/f2b/main/enhanced_f2b_custom.sh)
 ```
 
 2. Step by step installation:
 ```bash
 # Download script
-curl -sL -o f2b.sh https://raw.githubusercontent.com/asd5889921/f2b/main/enhanced_f2b.sh
+curl -sL -o f2b.sh https://raw.githubusercontent.com/asd5889921/f2b/main/enhanced_f2b_custom.sh
 
 # Add execution permission
 chmod +x f2b.sh
@@ -67,7 +75,7 @@ sudo ./f2b.sh
 
 ### 🚀 一键安装
 ```bash
-bash <(curl -sL https://raw.githubusercontent.com/asd5889921/f2b/main/enhanced_f2b.sh)
+bash <(curl -sL https://raw.githubusercontent.com/asd5889921/f2b/main/enhanced_f2b_custom.sh)
 ```
 
 ### 📋 特点
@@ -77,6 +85,9 @@ bash <(curl -sL https://raw.githubusercontent.com/asd5889921/f2b/main/enhanced_f
 - 自动服务管理
 - 实时监控
 - IP 管理工具
+- 自定义封禁设置
+- IP 白名单支持
+- 手动封禁/解封 IP
 
 ### 🔧 支持的系统
 - Debian
@@ -87,33 +98,38 @@ bash <(curl -sL https://raw.githubusercontent.com/asd5889921/f2b/main/enhanced_f
 
 ### 📦 功能列表
 1. 安装/重新配置 Fail2ban
-2. 查看 Fail2ban 状态
-3. 解封指定 IP
-4. 查看封禁日志
-5. 开机自启动
+2. 自定义配置 Fail2ban
+3. 查看 Fail2ban 状态
+4. 解封指定 IP
+5. 手动封禁 IP
+6. 查看封禁日志
+7. 开机自启动
 
-### ⚙️ 默认配置
-- 封禁时间：1小时
-- 检测时间范围：10分钟
-- 最大尝试次数：3次
+### ⚙️ 可自定义设置
+- SSH 端口：自动检测或手动输入
+- 封禁时间：可自定义（默认1小时）
+- 检测时间范围：可自定义（默认10分钟）
+- 最大尝试次数：可自定义（默认3次）
+- IP白名单：支持添加多个IP
 - 自动忽略本地网络
 
 ### 📝 注意事项
 - 需要 root 权限运行
 - 自动备份现有配置
 - 支持自动识别系统日志路径
+- 支持自定义封禁/解封IP
 
 ### 💡 其他安装方式
 
 1. 一键命令安装：
 ```bash
-bash <(curl -sL https://raw.githubusercontent.com/asd5889921/f2b/main/enhanced_f2b.sh)
+bash <(curl -sL https://raw.githubusercontent.com/asd5889921/f2b/main/enhanced_f2b_custom.sh)
 ```
 
 2. 分步安装：
 ```bash
 # 下载脚本
-curl -sL -o f2b.sh https://raw.githubusercontent.com/asd5889921/f2b/main/enhanced_f2b.sh
+curl -sL -o f2b.sh https://raw.githubusercontent.com/asd5889921/f2b/main/enhanced_f2b_custom.sh
 
 # 添加执行权限
 chmod +x f2b.sh
@@ -136,7 +152,7 @@ maxretry = 3
 # 解封IP时间
 unbantime = 3600
 # 忽略的IP地址
-ignoreip = 127.0.0.1/8 ::1
+ignoreip = 127.0.0.1/8 ::1 [您的白名单IP]
 
 [sshd]
 enabled = true
@@ -155,6 +171,9 @@ sudo fail2ban-client status
 # 查看 SSH 封禁状态
 sudo fail2ban-client status sshd
 
+# 手动封禁 IP
+sudo fail2ban-client set sshd banip [IP地址]
+
 # 解封指定 IP
 sudo fail2ban-client set sshd unbanip [IP地址]
 
@@ -166,6 +185,12 @@ sudo systemctl restart fail2ban
 ```
 
 ## 🔄 Update Log / 更新日志
+
+### v1.1.0 (2024-03-15)
+- Added custom ban settings / 添加自定义封禁设置
+- Added IP whitelist support / 添加IP白名单支持
+- Added manual IP ban feature / 添加手动封禁IP功能
+- Enhanced configuration options / 增强配置选项
 
 ### v1.0.0 (2024-03-14)
 - Initial release / 首次发布
