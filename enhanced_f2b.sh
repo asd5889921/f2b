@@ -1,5 +1,3 @@
-# 创建脚本
-cat > enhanced_f2b_custom.sh << 'EOF'
 #!/bin/bash
 
 # 定义颜色
@@ -10,14 +8,47 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 # 版本号
-VERSION="1.1.1"
+VERSION="1.2.0"
+
+# 全局变量
+BACKUP_DIR="/root/fail2ban_backup_$(date +%Y%m%d_%H%M%S)"
+LOG_FILE="/var/log/fail2ban_install.log"
+
+# 日志函数
+log() {
+    echo -e "$1" | tee -a "$LOG_FILE"
+}
+
+# 错误处理函数
+handle_error() {
+    log "${RED}错误：$1${NC}"
+    log "${YELLOW}详细错误信息已保存到：$LOG_FILE${NC}"
+    exit 1
+}
 
 # 检查root权限
 check_root() {
     if [ "$(id -u)" != "0" ]; then
-        echo -e "${RED}错误：此脚本需要root权限运行${NC}"
-        echo -e "${YELLOW}请使用 sudo -i 获取root权限后再运行${NC}"
-        exit 1
+        handle_error "此脚本需要root权限运行\n请使用 sudo -i 获取root权限后再运行"
+    fi
+}
+
+# 初始化日志
+init_log() {
+    mkdir -p "$(dirname "$LOG_FILE")"
+    touch "$LOG_FILE"
+    log "${BLUE}=== Fail2ban 安装日志 - $(date) ===${NC}"
+}
+
+# 创建备份目录
+create_backup() {
+    mkdir -p "$BACKUP_DIR"
+    log "${BLUE}创建备份目录：$BACKUP_DIR${NC}"
+    
+    # 备份现有的fail2ban配置（如果存在）
+    if [ -d "/etc/fail2ban" ]; then
+        cp -r /etc/fail2ban "$BACKUP_DIR/"
+        log "${GREEN}已备份现有fail2ban配置${NC}"
     fi
 }
 
@@ -27,87 +58,162 @@ get_system_info() {
         . /etc/os-release
         OS=$ID
         VERSION_ID=$VERSION_ID
+        log "${BLUE}检测到系统：$OS $VERSION_ID${NC}"
     else
-        echo -e "${RED}无法确定操作系统类型${NC}"
-        exit 1
+        handle_error "无法确定操作系统类型"
     fi
 }
 
-# 检测当前SSH端口
-detect_ssh_port() {
-    if command -v netstat >/dev/null 2>&1; then
-        current_ssh_port=$(netstat -tlpn | grep "sshd" | awk '{print $4}' | cut -d: -f2)
-    elif command -v ss >/dev/null 2>&1; then
-        current_ssh_port=$(ss -tlpn | grep "sshd" | awk '{print $4}' | cut -d: -f2)
+# 检查并安装基础依赖
+check_base_dependencies() {
+    log "${BLUE}检查基础依赖...${NC}"
+    
+    # 检查包管理器
+    if command -v apt >/dev/null 2>&1; then
+        PKG_MANAGER="apt"
+        PKG_UPDATE="apt update"
+        PKG_INSTALL="apt install -y"
+        PKG_REMOVE="apt remove -y"
+    elif command -v dnf >/dev/null 2>&1; then
+        PKG_MANAGER="dnf"
+        PKG_UPDATE="dnf check-update || true"  # 防止返回值1导致脚本退出
+        PKG_INSTALL="dnf install -y"
+        PKG_REMOVE="dnf remove -y"
+    elif command -v yum >/dev/null 2>&1; then
+        PKG_MANAGER="yum"
+        PKG_UPDATE="yum check-update || true"  # 防止返回值1导致脚本退出
+        PKG_INSTALL="yum install -y"
+        PKG_REMOVE="yum remove -y"
     else
-        current_ssh_port=22
+        handle_error "未找到支持的包管理器"
     fi
-    echo $current_ssh_port
+    
+    # 基础依赖列表
+    local base_deps=("curl" "wget" "systemd" "grep" "sed" "awk" "tar" "gzip" "cron" "net-tools")
+    local missing_deps=()
+    
+    # 检查每个依赖
+    for dep in "${base_deps[@]}"; do
+        if ! command -v $dep >/dev/null 2>&1; then
+            missing_deps+=($dep)
+        fi
+    done
+    
+    # 如果有缺失的依赖，则安装
+    if [ ${#missing_deps[@]} -ne 0 ]; then
+        log "${YELLOW}正在安装缺失的基础依赖: ${missing_deps[*]}${NC}"
+        $PKG_UPDATE
+        $PKG_INSTALL "${missing_deps[@]}" || handle_error "安装基础依赖失败"
+    fi
+    log "${GREEN}基础依赖检查完成${NC}"
 }
 
-# 安装依赖
-install_dependencies() {
-    echo -e "${BLUE}正在安装必要的依赖...${NC}"
+# 检查防火墙状态
+check_firewall() {
+    log "${BLUE}检查防火墙状态...${NC}"
+    
     case $OS in
         debian|ubuntu)
-            apt update
-            apt install -y fail2ban curl wget
-            ;;
-        centos|rhel|fedora)
-            if command -v dnf >/dev/null 2>&1; then
-                dnf install -y epel-release
-                dnf install -y fail2ban curl wget
-            else
-                yum install -y epel-release
-                yum install -y fail2ban curl wget
+            if command -v ufw >/dev/null 2>&1; then
+                if ufw status | grep -q "active"; then
+                    log "${YELLOW}检测到UFW防火墙正在运行${NC}"
+                    log "${BLUE}配置UFW规则...${NC}"
+                    ufw allow ssh
+                    ufw reload
+                fi
             fi
             ;;
-        *)
-            echo -e "${RED}不支持的操作系统${NC}"
-            exit 1
+        centos|rhel|fedora)
+            if command -v firewall-cmd >/dev/null 2>&1; then
+                if systemctl is-active firewalld >/dev/null 2>&1; then
+                    log "${YELLOW}检测到FirewallD防火墙正在运行${NC}"
+                    log "${BLUE}配置FirewallD规则...${NC}"
+                    firewall-cmd --permanent --add-service=ssh
+                    firewall-cmd --reload
+                fi
+            fi
             ;;
     esac
 }
 
+# 检查SELinux状态
+check_selinux() {
+    if command -v getenforce >/dev/null 2>&1; then
+        selinux_status=$(getenforce)
+        if [ "$selinux_status" != "Disabled" ]; then
+            log "${YELLOW}检测到SELinux已启用（$selinux_status）${NC}"
+            log "${BLUE}配置SELinux策略...${NC}"
+            $PKG_INSTALL policycoreutils-python-utils || true
+            semanage port -a -t ssh_port_t -p tcp 22 || true
+        fi
+    fi
+}
+
+# 检查并安装Fail2ban依赖
+install_fail2ban() {
+    log "${BLUE}安装Fail2ban及其依赖...${NC}"
+    
+    local fail2ban_deps=()
+    
+    case $OS in
+        debian|ubuntu)
+            if [ "$VERSION_ID" = "12" ]; then
+                fail2ban_deps=("fail2ban" "iptables" "ipset" "whois" "python3" "python3-systemd" "nftables")
+            else
+                fail2ban_deps=("fail2ban" "iptables" "ipset" "whois")
+            fi
+            ;;
+        centos|rhel|fedora)
+            # 安装EPEL仓库
+            if [ "$PKG_MANAGER" = "dnf" ]; then
+                $PKG_INSTALL epel-release
+            else
+                $PKG_INSTALL epel-release
+            fi
+            fail2ban_deps=("fail2ban" "fail2ban-systemd" "iptables" "ipset" "whois")
+            ;;
+    esac
+    
+    # 安装依赖
+    $PKG_UPDATE
+    for dep in "${fail2ban_deps[@]}"; do
+        log "${BLUE}安装 $dep...${NC}"
+        $PKG_INSTALL "$dep" || handle_error "安装 $dep 失败"
+    done
+}
+
 # 配置Fail2ban
 configure_fail2ban() {
-    local ssh_port=$1
-    local bantime=$2
-    local findtime=$3
-    local maxretry=$4
-    local whitelist=$5
+    log "${BLUE}配置Fail2ban...${NC}"
     
-    echo -e "${BLUE}正在配置Fail2ban...${NC}"
-    
-    # 创建配置目录（如果不存在）
+    # 创建配置目录
     mkdir -p /etc/fail2ban
     
-    # 备份原配置
-    if [ -f /etc/fail2ban/jail.local ]; then
-        cp /etc/fail2ban/jail.local /etc/fail2ban/jail.local.bak.$(date +%Y%m%d_%H%M%S)
-    fi
-    
-    # 创建新配置
-    cat > /etc/fail2ban/jail.local << EEOF
+    # 创建jail.local配置文件
+    cat > /etc/fail2ban/jail.local << EOF
 [DEFAULT]
 # 封禁时间（秒）
-bantime = $bantime
+bantime = 3600
 # 检测时间范围（秒）
-findtime = $findtime
+findtime = 600
 # 最大尝试次数
-maxretry = $maxretry
-# 解封IP
-unbantime = $bantime
-# 忽略本地网络
-ignoreip = 127.0.0.1/8 ::1 $whitelist
+maxretry = 3
+# 解封时间
+unbantime = 3600
+# 忽略IP
+ignoreip = 127.0.0.1/8 ::1
+
+# 动作设置
+banaction = %(banaction_allports)s
+banaction_allports = iptables-allports
 
 [sshd]
 enabled = true
-port = $ssh_port
+port = ssh
 filter = sshd
 logpath = %(sshd_log)s
-maxretry = $maxretry
-EEOF
+maxretry = 3
+EOF
 
     # 根据不同系统配置日志路径
     case $OS in
@@ -118,165 +224,188 @@ EEOF
             sed -i 's|%(sshd_log)s|/var/log/secure|' /etc/fail2ban/jail.local
             ;;
     esac
+    
+    # 创建自定义过滤器目录
+    mkdir -p /etc/fail2ban/filter.d
+    
+    # 配置sshd过滤器（增强版）
+    cat > /etc/fail2ban/filter.d/sshd.local << EOF
+[INCLUDES]
+before = common.conf
 
-    # 启用并重启服务
+[Definition]
+_daemon = sshd
+
+failregex = ^%(__prefix_line)s(?:error: PAM: )?Authentication failure for .* from <HOST>( via \S+)?\s*$
+            ^%(__prefix_line)s(?:error: PAM: )?User not known from <HOST>\s*$
+            ^%(__prefix_line)sFailed \S+ for invalid user .* from <HOST>( port \d*)?\s*$
+            ^%(__prefix_line)sFailed \S+ for .* from <HOST>( port \d*)?\s*$
+            ^%(__prefix_line)sROOT LOGIN REFUSED.* FROM <HOST>\s*$
+            ^%(__prefix_line)s[iI](?:llegal|nvalid) user .* from <HOST>\s*$
+            ^%(__prefix_line)sUser .+ from <HOST> not allowed because not listed in AllowUsers\s*$
+            ^%(__prefix_line)sUser .+ from <HOST> not allowed because listed in DenyUsers\s*$
+            ^%(__prefix_line)sUser .+ from <HOST> not allowed because not in any group\s*$
+            ^%(__prefix_line)srefused connect from \S+ \(<HOST>\)\s*$
+            ^%(__prefix_line)sReceived disconnect from <HOST>: 3: \S+: Auth fail$
+            ^%(__prefix_line)sUser .+ from <HOST> not allowed because a group is listed in DenyGroups\s*$
+            ^%(__prefix_line)sUser .+ from <HOST> not allowed because none of user's groups are listed in AllowGroups\s*$
+            ^%(__prefix_line)spam_unix\(sshd:auth\):\s+authentication failure;\s*logname=\S*\s*uid=\d*\s*euid=\d*\s*tty=\S*\s*ruser=\S*\s*rhost=<HOST>\s.*$
+
+ignoreregex = 
+
+[Init]
+maxlines = 10
+EOF
+}
+
+# 配置系统自启动
+configure_autostart() {
+    log "${BLUE}配置系统自启动...${NC}"
+    
+    # 创建systemd服务单元
+    cat > /lib/systemd/system/fail2ban.service << EOF
+[Unit]
+Description=Fail2Ban Service
+Documentation=man:fail2ban(1)
+After=network.target iptables.service nftables.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/fail2ban-server -f -x
+ExecStop=/usr/bin/fail2ban-client stop
+ExecReload=/usr/bin/fail2ban-client reload
+PIDFile=/var/run/fail2ban/fail2ban.pid
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    # 重新加载systemd配置
+    systemctl daemon-reload
+    
+    # 启用并启动服务
     systemctl enable fail2ban
     systemctl restart fail2ban
     
-    echo -e "${GREEN}Fail2ban配置完成！${NC}"
-    echo -e "${GREEN}当前配置：${NC}"
-    echo -e "SSH端口: ${YELLOW}$ssh_port${NC}"
-    echo -e "最大尝试次数: ${YELLOW}$maxretry${NC}"
-    echo -e "封禁时间: ${YELLOW}$(($bantime/3600))小时${NC}"
-    echo -e "检测时间范围: ${YELLOW}$(($findtime/60))分钟${NC}"
-    echo -e "白名单IP: ${YELLOW}$whitelist${NC}"
-}
-
-# 显示封禁IP列表
-show_banned_ips() {
-    echo -e "${BLUE}当前封禁的IP列表：${NC}"
-    
-    # 使用 status 命令获取封禁信息
-    local status_output=$(fail2ban-client status sshd)
-    
-    # 提取当前封禁的IP
-    local banned_ips=$(echo "$status_output" | grep "Banned IP list:" | sed 's/.*Banned IP list:\s*\(.*\)/\1/')
-    
-    if [ -z "$banned_ips" ] || [ "$banned_ips" = "[]" ]; then
-        echo -e "${YELLOW}当前没有被封禁的IP${NC}"
-    else
-        # 移除方括号并分割IP
-        banned_ips=$(echo "$banned_ips" | tr -d '[]' | tr ',' ' ')
-        echo -e "${YELLOW}已封禁的IP列表：${NC}"
-        for ip in $banned_ips; do
-            echo -e "IP: ${YELLOW}$ip${NC}"
-            
-            # 获取此IP的失败次数
-            local failures=$(fail2ban-client status sshd | grep "Total failed attempts:" | awk '{print $4}')
-            echo -e "失败尝试次数: ${YELLOW}${failures:-未知}${NC}"
-            
-            # 显示分隔线
-            echo "----------------------------------------"
-        done
-        
-        # 显示总计
-        local total_banned=$(echo "$banned_ips" | wc -w)
-        echo -e "\n${BLUE}总计封禁IP数: ${YELLOW}$total_banned${NC}"
+    # 检查服务状态
+    if ! systemctl is-active fail2ban >/dev/null 2>&1; then
+        handle_error "fail2ban服务未能正常启动，请检查日志"
     fi
+    log "${GREEN}fail2ban服务已成功启动并设置为开机自启${NC}"
 }
 
-# 手动封禁IP
-ban_ip() {
-    local ip=$1
-    fail2ban-client set sshd banip $ip
-    echo -e "${GREEN}已封禁IP: $ip${NC}"
+# 配置日志轮转
+configure_logrotate() {
+    log "${BLUE}配置日志轮转...${NC}"
+    
+    cat > /etc/logrotate.d/fail2ban << EOF
+/var/log/fail2ban.log {
+    weekly
+    rotate 4
+    compress
+    delaycompress
+    missingok
+    postrotate
+        fail2ban-client set logtarget /var/log/fail2ban.log >/dev/null
+    endscript
+}
+EOF
 }
 
-# 显示状态
-show_status() {
-    echo -e "${BLUE}Fail2ban状态：${NC}"
-    systemctl status fail2ban
-    echo -e "\n${BLUE}已封禁的IP：${NC}"
-    fail2ban-client status sshd
-}
-
-# 自定义配置菜单
-custom_config_menu() {
-    local detected_port=$(detect_ssh_port)
-    echo -e "${YELLOW}检测到当前SSH端口为: $detected_port${NC}"
-    read -p "是否使用此端口配置Fail2ban？[Y/n]: " confirm
-    if [[ $confirm =~ ^[Nn]$ ]]; then
-        read -p "请输入新的SSH端口: " new_port
-        ssh_port=$new_port
-    else
-        ssh_port=$detected_port
-    fi
-
-    read -p "请输入封禁时间（小时，默认1小时）: " ban_hours
-    ban_hours=${ban_hours:-1}
-    bantime=$((ban_hours * 3600))
-
-    read -p "请输入检测时间范围（分钟，默认10分钟）: " find_minutes
-    find_minutes=${find_minutes:-10}
-    findtime=$((find_minutes * 60))
-
-    read -p "请输入最大尝试次数（默认3次）: " max_retry
-    maxretry=${max_retry:-3}
-
-    read -p "请输入白名单IP（多个IP用空格分隔，直接回车跳过）: " whitelist
-    whitelist=${whitelist:-""}
-
-    install_dependencies
-    configure_fail2ban "$ssh_port" "$bantime" "$findtime" "$maxretry" "$whitelist"
-}
-
-# 主菜单
-main_menu() {
-    while true; do
-        echo -e "\n${GREEN}=== Fail2ban 管理脚本 v${VERSION} ===${NC}"
-        echo -e "${BLUE}1. 安装/重新配置 Fail2ban${NC}"
-        echo -e "${BLUE}2. 自定义配置 Fail2ban${NC}"
-        echo -e "${BLUE}3. 查看 Fail2ban 状态${NC}"
-        echo -e "${BLUE}4. 查看当前封禁IP${NC}"
-        echo -e "${BLUE}5. 解封指定IP${NC}"
-        echo -e "${BLUE}6. 手动封禁IP${NC}"
-        echo -e "${BLUE}7. 查看封禁日志${NC}"
-        echo -e "${BLUE}0. 退出${NC}"
-        
-        read -p "请选择操作 [0-7]: " choice
-        
-        case $choice in
-            1)
-                install_dependencies
-                configure_fail2ban "$(detect_ssh_port)" "3600" "600" "3" ""
-                ;;
-            2)
-                custom_config_menu
-                ;;
-            3)
-                show_status
-                ;;
-            4)
-                show_banned_ips
-                ;;
-            5)
-                read -p "请输入要解封的IP: " ip
-                fail2ban-client set sshd unbanip $ip
-                echo -e "${GREEN}已解封IP: $ip${NC}"
-                ;;
-            6)
-                read -p "请输入要封禁的IP: " ip
-                ban_ip $ip
-                ;;
-            7)
-                case $OS in
-                    debian|ubuntu)
-                        tail -n 50 /var/log/fail2ban.log
-                        ;;
-                    centos|rhel|fedora)
-                        tail -n 50 /var/log/fail2ban/fail2ban.log
-                        ;;
-                esac
-                ;;
-            0)
-                echo -e "${GREEN}感谢使用！${NC}"
-                exit 0
-                ;;
-            *)
-                echo -e "${RED}无效的选择${NC}"
-                ;;
-        esac
-    done
-}
-
-# 程序入口
-check_root
-get_system_info
-main_menu
+# 创建快捷命令
+create_shortcuts() {
+    log "${BLUE}创建快捷命令...${NC}"
+    
+    cat > /usr/local/bin/f2b << EOF
+#!/bin/bash
+case "\$1" in
+    status)
+        fail2ban-client status
+        ;;
+    banned)
+        fail2ban-client status sshd
+        ;;
+    unban)
+        if [ -z "\$2" ]; then
+            echo "使用方法: f2b unban <IP>"
+        else
+            fail2ban-client set sshd unbanip \$2
+        fi
+        ;;
+    ban)
+        if [ -z "\$2" ]; then
+            echo "使用方法: f2b ban <IP>"
+        else
+            fail2ban-client set sshd banip \$2
+        fi
+        ;;
+    log)
+        tail -f /var/log/fail2ban.log
+        ;;
+    *)
+        echo "使用方法: f2b {status|banned|unban|ban|log}"
+        ;;
+esac
 EOF
 
-# 添加执行权限
-chmod +x enhanced_f2b_custom.sh
+    chmod +x /usr/local/bin/f2b
+    log "${GREEN}已创建快捷命令 'f2b'${NC}"
+}
 
-# 运行脚本
-./enhanced_f2b_custom.sh
+# 显示安装完成信息
+show_completion() {
+    local ssh_port=$(grep -oP '^Port\s+\K\d+' /etc/ssh/sshd_config 2>/dev/null || echo 22)
+    local public_ip=$(curl -s ifconfig.me || wget -qO- ifconfig.me)
+    
+    log "\n${GREEN}=== Fail2ban 安装完成 ===${NC}"
+    log "${BLUE}基本信息：${NC}"
+    log "- SSH端口: ${YELLOW}$ssh_port${NC}"
+    log "- 公网IP: ${YELLOW}$public_ip${NC}"
+    log "- 配置文件: ${YELLOW}/etc/fail2ban/jail.local${NC}"
+    log "- 日志文件: ${YELLOW}/var/log/fail2ban.log${NC}"
+    
+    log "\n${BLUE}快捷命令使用方法：${NC}"
+    log "- 查看状态: ${YELLOW}f2b status${NC}"
+    log "- 查看封禁: ${YELLOW}f2b banned${NC}"
+    log "- 封禁IP:  ${YELLOW}f2b ban <IP>${NC}"
+    log "- 解封IP:  ${YELLOW}f2b unban <IP>${NC}"
+    log "- 查看日志: ${YELLOW}f2b log${NC}"
+    
+    log "\n${BLUE}备份信息：${NC}"
+    log "- 备份目录: ${YELLOW}$BACKUP_DIR${NC}"
+    log "- 安装日志: ${YELLOW}$LOG_FILE${NC}"
+    
+    log "\n${GREEN}现在您可以使用上述命令来管理Fail2ban了！${NC}"
+}
+
+# 主函数
+main() {
+    clear
+    echo -e "${GREEN}=== Fail2ban 增强版安装脚本 v${VERSION} ===${NC}"
+    echo -e "${BLUE}正在准备安装...${NC}\n"
+    
+    # 初始化
+    check_root
+    init_log
+    create_backup
+    get_system_info
+    
+    # 系统准备
+    check_base_dependencies
+    check_firewall
+    check_selinux
+    
+    # 安装配置
+    install_fail2ban
+    configure_fail2ban
+    configure_autostart
+    configure_logrotate
+    create_shortcuts
+    
+    # 完成
+    show_completion
+}
+
+# 执行主函数
+main
