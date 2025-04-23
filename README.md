@@ -1,18 +1,116 @@
-# Enhanced Fail2ban 安装脚本
+# Fail2ban 增强版管理器
 
-[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-![Shell Script](https://img.shields.io/badge/Shell_Script-121011?style=flat&logo=gnu-bash&logoColor=white)
+## 中文说明
+
+### 快速安装
+```bash
+bash <(curl -sL https://raw.githubusercontent.com/asd5889921/f2b/main/enhanced_f2b.sh)
+```
+
+### 功能特点
+- ✨ 一键安装/配置
+- 🔒 智能SSH端口检测
+- 🚫 IP封禁管理
+- 📊 实时状态监控
+- 🔄 自动服务修复
+- 💻 便捷的命令行工具
+
+### 系统要求
+- Debian/Ubuntu 系统
+- 需要root权限
+- Debian 12及以上版本需要安装rsyslog
+
+### 主要功能
+1. 安装/重新配置 Fail2ban
+2. 查看服务运行状态
+3. 管理封禁IP
+4. 查看封禁日志
+5. 修改配置参数
+6. 服务管理
+7. 完整卸载功能
+
+### 快捷命令
+安装完成后，可以使用以下命令：
+```bash
+f2b status   # 查看状态
+f2b banned   # 查看封禁IP
+f2b unban IP # 解封指定IP
+f2b ban IP   # 手动封禁IP
+f2b log      # 查看日志
+```
+
+### 注意事项
+1. Debian 12 需要额外安装 rsyslog
+2. 首次安装会自动备份原有配置
+3. 建议安装前先更新系统
+
+### 问题排查
+如果遇到问题，请检查：
+1. 系统日志: `/var/log/fail2ban.log`
+2. 服务状态: `systemctl status fail2ban`
+3. 认证日志: `/var/log/auth.log`
+
+---
+
+## English Description
+
+### Quick Install
+```bash
+bash <(curl -sL https://raw.githubusercontent.com/asd5889921/f2b/main/enhanced_f2b.sh)
+```
+
+### Features
+- ✨ One-click installation
+- 🔒 Smart SSH port detection
+- 🚫 IP ban management
+- 📊 Real-time status monitoring
+- 🔄 Automatic service repair
+- 💻 Convenient CLI tools
+
+### Requirements
+- Debian/Ubuntu system
+- Root privileges required
+- Rsyslog required for Debian 12+
+
+### Main Functions
+1. Install/Reconfigure Fail2ban
+2. View service status
+3. Manage banned IPs
+4. View ban logs
+5. Modify configurations
+6. Service management
+7. Complete uninstall
+
+### Quick Commands
+After installation, you can use:
+```bash
+f2b status   # Check status
+f2b banned   # View banned IPs
+f2b unban IP # Unban IP
+f2b ban IP   # Ban IP
+f2b log      # View logs
+```
+
+### Notes
+1. Debian 12 requires rsyslog
+2. Original config will be backed up
+3. System update recommended before install
+
+### Troubleshooting
+If issues occur, check:
+1. System log: `/var/log/fail2ban.log`
+2. Service status: `systemctl status fail2ban`
+3. Auth log: `/var/log/auth.log`
 
 ## 功能特点
 
-- 🚀 一键安装和配置 Fail2ban
-- 🛡️ 增强的SSH防护规则
+- 🚀 一键安装和交互式配置
+- 🛡️ 简单高效的SSH防护
 - 🔄 自动备份现有配置
 - 📝 详细的安装日志
 - 🌐 支持多种Linux发行版
-- 🔧 自动配置防火墙规则
-- 🔒 自动处理SELinux策略
-- 📊 便捷的管理命令
+- 🔧 便捷的管理界面
+- 📊 实时监控和管理
 
 ## 快速开始
 
@@ -52,24 +150,28 @@ sudo ./enhanced_f2b.sh
 - RHEL 7+
 - Fedora 30+
 
-## 主要功能
+## 交互式功能
 
-### 自动安装和配置
-- 自动检测系统类型
-- 安装必要依赖
-- 配置Fail2ban服务
-- 设置开机自启
-- 配置日志轮转
+### 主菜单选项
+1. 安装/重新配置 Fail2ban
+2. 查看 Fail2ban 状态
+3. 查看当前封禁IP
+4. 解封指定IP
+5. 手动封禁IP
+6. 查看封禁日志
+7. 修改配置
+8. 重启服务
+9. 卸载 Fail2ban
+0. 退出
 
-### 安全特性
-- 备份现有配置
-- 增强的SSH防护规则
-- 自动配置防火墙
-- SELinux策略适配
-- 详细的安装日志
+### 配置选项
+- 修改封禁时间
+- 修改最大尝试次数
+- 修改检测时间范围
+- 添加IP白名单
 
-### 便捷管理命令
-安装完成后，可以使用以下命令管理Fail2ban：
+### 快捷命令
+安装完成后，可以使用以下命令快速管理：
 
 - `f2b status` - 查看Fail2ban状态
 - `f2b banned` - 查看被封禁的IP
@@ -90,6 +192,44 @@ sudo ./enhanced_f2b.sh
 - 日志文件：`/var/log/fail2ban.log`
 - 安装日志：`/var/log/fail2ban_install.log`
 
+## 使用示例
+
+### 1. 安装和初始配置
+```bash
+bash <(curl -sL https://raw.githubusercontent.com/asd5889921/f2b/main/enhanced_f2b.sh)
+# 选择选项 1 进行安装
+```
+
+### 2. 查看当前状态
+```bash
+# 通过菜单：
+./enhanced_f2b.sh  # 选择选项 2
+
+# 或使用快捷命令：
+f2b status
+```
+
+### 3. 管理封禁IP
+```bash
+# 查看封禁列表：
+f2b banned
+
+# 手动封禁IP：
+f2b ban 192.168.1.100
+
+# 解封IP：
+f2b unban 192.168.1.100
+```
+
+### 4. 卸载 Fail2ban
+```bash
+# 通过菜单：
+./enhanced_f2b.sh  # 选择选项 9
+
+# 或直接运行卸载命令：
+f2b uninstall  # 将在下个版本添加
+```
+
 ## 故障排除
 
 如果遇到问题，可以：
@@ -109,6 +249,13 @@ f2b status
 journalctl -u fail2ban
 ```
 
+## 注意事项
+
+1. 脚本需要root权限运行
+2. 会自动备份现有配置
+3. 支持自动识别系统类型
+4. 仅安装必要的依赖（fail2ban和iptables）
+
 ## 贡献指南
 
 欢迎提交 Issue 和 Pull Request 来帮助改进这个项目！
@@ -124,12 +271,18 @@ journalctl -u fail2ban
 ## 更新日志
 
 ### v1.2.0
-- 增加了自动备份功能
-- 改进了错误处理机制
-- 添加了详细的日志记录
-- 优化了系统兼容性
-- 增强了SSH防护规则
+- 添加交互式菜单界面
+- 精简依赖，提高安装速度
+- 优化配置管理功能
+- 增加快捷命令支持
+- 改进错误处理机制
+
+### v1.2.1
+- 添加卸载功能
+- 优化SSH端口配置
+- 修复服务启动问题
+- 改进错误处理机制
 
 ## 致谢
 
-感谢所有为这个项目做出贡献的开发者！
+感谢所有为这个项目做出贡献的开发者！ 
