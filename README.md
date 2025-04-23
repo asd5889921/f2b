@@ -18,7 +18,7 @@ bash <(curl -sL https://raw.githubusercontent.com/asd5889921/f2b/main/enhanced_f
 ### 系统要求
 - Debian/Ubuntu 系统
 - 需要root权限
-- Debian 12及以上版本需要安装rsyslog
+- 系统支持systemd服务管理
 
 ### 主要功能
 1. 安装/重新配置 Fail2ban
@@ -40,9 +40,9 @@ f2b log      # 查看日志
 ```
 
 ### 注意事项
-1. Debian 12 需要额外安装 rsyslog
-2. 首次安装会自动备份原有配置
-3. 建议安装前先更新系统
+1. 首次安装会自动备份原有配置
+2. 建议安装前先更新系统
+3. 脚本会自动安装所需依赖
 
 ### 问题排查
 如果遇到问题，请检查：
@@ -70,7 +70,7 @@ bash <(curl -sL https://raw.githubusercontent.com/asd5889921/f2b/main/enhanced_f
 ### Requirements
 - Debian/Ubuntu system
 - Root privileges required
-- Rsyslog required for Debian 12+
+- 系统支持systemd服务管理
 
 ### Main Functions
 1. Install/Reconfigure Fail2ban
@@ -92,9 +92,9 @@ f2b log      # View logs
 ```
 
 ### Notes
-1. Debian 12 requires rsyslog
-2. Original config will be backed up
-3. System update recommended before install
+1. Original config will be backed up
+2. System update recommended before install
+3. Script will install necessary dependencies
 
 ### Troubleshooting
 If issues occur, check:
