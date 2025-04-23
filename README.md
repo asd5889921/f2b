@@ -39,16 +39,31 @@ f2b ban IP   # 手动封禁IP
 f2b log      # 查看日志
 ```
 
+### 配置说明
+- 默认封禁时间：3600秒（1小时）
+- 检测时间范围：600秒（10分钟）
+- 最大尝试次数：3次
+- 自动解封时间：3600秒（1小时）
+
 ### 注意事项
 1. 首次安装会自动备份原有配置
 2. 建议安装前先更新系统
 3. 脚本会自动安装所需依赖
+4. 支持自动识别系统类型
 
 ### 问题排查
 如果遇到问题，请检查：
 1. 系统日志: `/var/log/fail2ban.log`
 2. 服务状态: `systemctl status fail2ban`
 3. 认证日志: `/var/log/auth.log`
+
+### 更新日志
+
+#### v1.2.1
+- 添加卸载功能
+- 优化SSH端口配置
+- 修复服务启动问题
+- 改进错误处理机制
 
 ---
 
@@ -70,7 +85,7 @@ bash <(curl -sL https://raw.githubusercontent.com/asd5889921/f2b/main/enhanced_f
 ### Requirements
 - Debian/Ubuntu system
 - Root privileges required
-- 系统支持systemd服务管理
+- System with systemd support
 
 ### Main Functions
 1. Install/Reconfigure Fail2ban
@@ -91,16 +106,39 @@ f2b ban IP   # Ban IP
 f2b log      # View logs
 ```
 
+### Configuration
+- Default ban time: 3600s (1 hour)
+- Find time: 600s (10 minutes)
+- Max retry: 3 times
+- Unban time: 3600s (1 hour)
+
 ### Notes
 1. Original config will be backed up
 2. System update recommended before install
 3. Script will install necessary dependencies
+4. Automatic system detection
 
 ### Troubleshooting
 If issues occur, check:
 1. System log: `/var/log/fail2ban.log`
 2. Service status: `systemctl status fail2ban`
 3. Auth log: `/var/log/auth.log`
+
+### Changelog
+
+#### v1.2.1
+- Added uninstall feature
+- Optimized SSH port configuration
+- Fixed service startup issues
+- Improved error handling
+
+## License
+
+MIT License - See [LICENSE](LICENSE) file for details
+
+## Author
+
+- GitHub: [@asd5889921](https://github.com/asd5889921)
 
 ## 功能特点
 
