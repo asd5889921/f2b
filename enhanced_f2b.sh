@@ -403,6 +403,18 @@ install_fail2ban() {
     read
 }
 
+# 获取SSH端口
+get_ssh_ports() {
+    local ports=""
+    if [ -f "/etc/ssh/sshd_config" ]; then
+        ports=$(grep -E "^Port\s+[0-9]+" /etc/ssh/sshd_config | awk '{print $2}' | tr '\n' ' ')
+    fi
+    if [ -z "$ports" ]; then
+        ports="22"  # 如果没有找到自定义端口，返回默认端口
+    fi
+    echo "$ports"
+}
+
 # 查看状态
 show_status() {
     clear
@@ -421,10 +433,26 @@ show_status() {
     else
         echo -e "${YELLOW}○ 开机自启: 未启用${NC}"
     fi
+
+    # 显示SSH端口
+    echo -e "\n${BLUE}SSH监听端口:${NC}"
+    ssh_ports=$(get_ssh_ports)
+    echo -e "当前SSH端口: ${GREEN}${ssh_ports}${NC}"
     
     # 显示运行时间
     echo -e "\n${BLUE}运行时间:${NC}"
-    systemctl status fail2ban | grep "Active:" | sed 's/Active:/运行时长:/' || echo -e "${RED}无法获取运行时间${NC}"
+    status_output=$(systemctl status fail2ban | grep "Active:")
+    if echo "$status_output" | grep -q "active (running)"; then
+        status_line=$(echo "$status_output" | sed "s/Active:/运行时长:/")
+        # 替换 "active" 和 "(running)" 为带颜色的版本
+        colored_status=$(echo "$status_line" | sed "s/active/${GREEN}active${NC}/" | sed "s/(running)/${GREEN}(running)${NC}/")
+        echo -e "$colored_status"
+    else
+        status_line=$(echo "$status_output" | sed "s/Active:/运行时长:/")
+        # 如果不是运行状态，显示为红色
+        colored_status=$(echo "$status_line" | sed "s/inactive/${RED}inactive${NC}/" | sed "s/failed/${RED}failed${NC}/")
+        echo -e "$colored_status"
+    fi
     
     echo -e "\n${BLUE}监狱状态:${NC}"
     fail2ban-client status
