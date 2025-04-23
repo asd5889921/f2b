@@ -1,47 +1,57 @@
-# 修改install_dependencies函数
-install_dependencies() {
-    log "${BLUE}检查基础依赖...${NC}"
-    
-    # 检查包管理器
-    if command -v apt >/dev/null 2>&1; then
-        PKG_MANAGER="apt"
-        PKG_UPDATE="apt update"
-        PKG_INSTALL="apt install -y"
-        
-        # Debian 12 需要特殊处理
-        if [ "$OS" = "debian" ] && [ "$VERSION_ID" = "12" ]; then
-            $PKG_UPDATE
-            $PKG_INSTALL fail2ban python3 python3-systemd iptables nftables || handle_error "安装失败"
-        else
-            $PKG_UPDATE
-            $PKG_INSTALL fail2ban iptables || handle_error "安装失败"
-        fi
-    elif command -v dnf >/dev/null 2>&1; then
-        PKG_MANAGER="dnf"
-        PKG_UPDATE="dnf check-update || true"
-        PKG_INSTALL="dnf install -y"
-        $PKG_INSTALL epel-release
-        $PKG_INSTALL fail2ban iptables || handle_error "安装失败"
-    elif command -v yum >/dev/null 2>&1; then
-        PKG_MANAGER="yum"
-        PKG_UPDATE="yum check-update || true"
-        PKG_INSTALL="yum install -y"
-        $PKG_INSTALL epel-release
-        $PKG_INSTALL fail2ban iptables || handle_error "安装失败"
-    else
-        handle_error "未找到支持的包管理器"
-    fi
-    
-    log "${GREEN}基础依赖安装完成${NC}"
-}
-
 # 修改configure_fail2ban函数
 configure_fail2ban() {
     log "${BLUE}配置Fail2ban...${NC}"
     
-    # 创建配置目录
-    mkdir -p /etc/fail2ban
+    # 创建必要的目录
+    mkdir -p /etc/fail2ban/filter.d
+    mkdir -p /etc/fail2ban/action.d
+    mkdir -p /var/run/fail2ban
     
+    # 创建基础配置文件
+    cat > /etc/fail2ban/fail2ban.conf << EOF
+[Definition]
+loglevel = INFO
+logtarget = /var/log/fail2ban.log
+syslogsocket = auto
+socket = /var/run/fail2ban/fail2ban.sock
+pidfile = /var/run/fail2ban/fail2ban.pid
+dbfile = /var/lib/fail2ban/fail2ban.sqlite3
+EOF
+
+    # 创建sshd过滤器
+    cat > /etc/fail2ban/filter.d/sshd.conf << EOF
+[INCLUDES]
+before = common.conf
+
+[Definition]
+_daemon = sshd
+
+failregex = ^%(__prefix_line)s(?:error: PAM: )?Authentication failure for .* from <HOST>( via \S+)?\s*$
+            ^%(__prefix_line)s(?:error: PAM: )?User not known from <HOST>\s*$
+            ^%(__prefix_line)sFailed \S+ for invalid user .* from <HOST>( port \d*)?\s*$
+            ^%(__prefix_line)sFailed \S+ for .* from <HOST>( port \d*)?\s*$
+            ^%(__prefix_line)sROOT LOGIN REFUSED.* FROM <HOST>\s*$
+            ^%(__prefix_line)s[iI](?:llegal|nvalid) user .* from <HOST>\s*$
+
+ignoreregex =
+EOF
+
+    # 创建公共配置
+    cat > /etc/fail2ban/filter.d/common.conf << EOF
+[INCLUDES]
+
+[Definition]
+
+_daemon = \S+
+
+__prefix_line = %(known/_daemon)s(?:\[\d+\])?: 
+
+[Init]
+known/_daemon = %(known/daemon)s
+known/daemon = $_daemon
+maxlines = 1
+EOF
+
     # 检测SSH端口
     local default_ssh_port=$(grep -oP '^Port\s+\K\d+' /etc/ssh/sshd_config 2>/dev/null || echo 22)
     echo -e "${YELLOW}检测到SSH端口为: $default_ssh_port${NC}"
@@ -60,7 +70,7 @@ configure_fail2ban() {
     fi
     
     # 创建jail.local配置文件
-    cat > /etc/fail2ban/jail.local << EOF
+    cat > /etc/fail2ban/jail.conf << EOF
 [DEFAULT]
 # 封禁时间（秒）
 bantime = 3600
@@ -88,6 +98,9 @@ logpath = %(sshd_log)s
 maxretry = 3
 EOF
 
+    # 创建jail.local（用户自定义配置）
+    cp /etc/fail2ban/jail.conf /etc/fail2ban/jail.local
+
     # 根据不同系统配置日志路径
     case $OS in
         debian|ubuntu)
@@ -107,19 +120,38 @@ EOF
             ;;
     esac
 
-    # 确保日志文件存在
+    # 确保日志文件存在并设置权限
     touch /var/log/fail2ban.log
     chmod 640 /var/log/fail2ban.log
+    
+    # 设置目录权限
+    chown -R root:root /etc/fail2ban
+    chmod -R 644 /etc/fail2ban
+    chmod 755 /etc/fail2ban
+    chmod 755 /etc/fail2ban/filter.d
+    chmod 755 /etc/fail2ban/action.d
+    
+    # 创建数据目录
+    mkdir -p /var/lib/fail2ban
+    chown -R root:root /var/lib/fail2ban
+    chmod 755 /var/lib/fail2ban
 }
 
-# 修改install_fail2ban函数中的服务启动部分
+# 修改install_fail2ban函数中的服务重启部分
 install_fail2ban() {
     # ... 保持原有代码不变直到服务启动部分 ...
     
-    # 确保服务目录存在
+    # 确保服务目录存在并设置权限
     mkdir -p /var/run/fail2ban
     chown -R root:root /var/run/fail2ban
     chmod 755 /var/run/fail2ban
+    
+    # 停止现有服务
+    systemctl stop fail2ban || true
+    
+    # 清理可能存在的锁定文件
+    rm -f /var/run/fail2ban/fail2ban.pid
+    rm -f /var/run/fail2ban/fail2ban.sock
     
     # 启动服务
     systemctl daemon-reload
@@ -127,7 +159,7 @@ install_fail2ban() {
     systemctl restart fail2ban
     
     # 等待服务启动
-    sleep 3
+    sleep 5
     
     if ! systemctl is-active fail2ban >/dev/null 2>&1; then
         echo -e "${RED}服务启动失败，尝试修复...${NC}"
@@ -138,12 +170,13 @@ install_fail2ban() {
         # 尝试修复
         systemctl stop fail2ban
         rm -f /var/run/fail2ban/fail2ban.pid
+        rm -f /var/run/fail2ban/fail2ban.sock
         mkdir -p /var/run/fail2ban
         chown -R root:root /var/run/fail2ban
         chmod 755 /var/run/fail2ban
         systemctl daemon-reload
         systemctl restart fail2ban
-        sleep 3
+        sleep 5
         
         if ! systemctl is-active fail2ban >/dev/null 2>&1; then
             echo -e "${RED}服务启动失败，请检查系统日志：${NC}"
@@ -154,7 +187,8 @@ install_fail2ban() {
     
     echo -e "\n${GREEN}Fail2ban 安装完成！${NC}"
     echo -e "${BLUE}当前状态：${NC}"
-    sleep 1
+    sleep 2
+    fail2ban-client ping || echo -e "${RED}服务未响应${NC}"
     fail2ban-client status || echo -e "${RED}无法获取状态，请检查日志${NC}"
     
     echo -e "\n${YELLOW}按回车键返回主菜单${NC}"
