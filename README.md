@@ -1,6 +1,19 @@
 # Fail2ban 增强版管理器
 
+[中文](#中文说明) | [English](#english-description)
+
 ## 中文说明
+
+### 目录
+- [快速安装](#快速安装)
+- [功能特点](#功能特点)
+- [系统要求](#系统要求)
+- [主要功能](#主要功能)
+- [快捷命令](#快捷命令)
+- [配置说明](#配置说明)
+- [注意事项](#注意事项)
+- [问题排查](#问题排查)
+- [更新日志](#更新日志)
 
 ### 快速安装
 ```bash
@@ -68,6 +81,17 @@ f2b log      # 查看日志
 ---
 
 ## English Description
+
+### Table of Contents
+- [Quick Install](#quick-install)
+- [Features](#features)
+- [Requirements](#requirements)
+- [Main Functions](#main-functions)
+- [Quick Commands](#quick-commands)
+- [Configuration](#configuration)
+- [Notes](#notes)
+- [Troubleshooting](#troubleshooting)
+- [Changelog](#changelog)
 
 ### Quick Install
 ```bash
