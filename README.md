@@ -6,7 +6,7 @@
 
 ### 🚀 Quick Install
 ```bash
-bash <(curl -sL https://raw.githubusercontent.com/asd5889921/f2b/main/enhanced_f2b_custom.sh)
+bash <(curl -sL https://raw.githubusercontent.com/asd5889921/f2b/main/enhanced_f2b.sh)
 ```
 
 ### 📋 Features
@@ -55,13 +55,13 @@ bash <(curl -sL https://raw.githubusercontent.com/asd5889921/f2b/main/enhanced_f
 
 1. One-line command:
 ```bash
-bash <(curl -sL https://raw.githubusercontent.com/asd5889921/f2b/main/enhanced_f2b_custom.sh)
+bash <(curl -sL https://raw.githubusercontent.com/asd5889921/f2b/main/enhanced_f2b.sh)
 ```
 
 2. Step by step installation:
 ```bash
 # Download script
-curl -sL -o f2b.sh https://raw.githubusercontent.com/asd5889921/f2b/main/enhanced_f2b_custom.sh
+curl -sL -o f2b.sh https://raw.githubusercontent.com/asd5889921/f2b/main/enhanced_f2b.sh
 
 # Add execution permission
 chmod +x f2b.sh
@@ -76,7 +76,7 @@ sudo ./f2b.sh
 
 ### 🚀 一键安装
 ```bash
-bash <(curl -sL https://raw.githubusercontent.com/asd5889921/f2b/main/enhanced_f2b_custom.sh)
+bash <(curl -sL https://raw.githubusercontent.com/asd5889921/f2b/main/enhanced_f2b.sh)
 ```
 
 ### 📋 特点
@@ -125,13 +125,13 @@ bash <(curl -sL https://raw.githubusercontent.com/asd5889921/f2b/main/enhanced_f
 
 1. 一键命令安装：
 ```bash
-bash <(curl -sL https://raw.githubusercontent.com/asd5889921/f2b/main/enhanced_f2b_custom.sh)
+bash <(curl -sL https://raw.githubusercontent.com/asd5889921/f2b/main/enhanced_f2b.sh)
 ```
 
 2. 分步安装：
 ```bash
 # 下载脚本
-curl -sL -o f2b.sh https://raw.githubusercontent.com/asd5889921/f2b/main/enhanced_f2b_custom.sh
+curl -sL -o f2b.sh https://raw.githubusercontent.com/asd5889921/f2b/main/enhanced_f2b.sh
 
 # 添加执行权限
 chmod +x f2b.sh
@@ -171,7 +171,7 @@ maxretry = 3
 sudo fail2ban-client status
 
 # 查看当前封禁的IP列表
-sudo fail2ban-client get sshd banned
+sudo fail2ban-client status sshd | grep "Banned IP list"
 
 # 查看 SSH 封禁状态
 sudo fail2ban-client status sshd
