@@ -8,7 +8,7 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 # 版本号
-VERSION="1.0.0"
+VERSION="1.1.0"
 
 # 检查root权限
 check_root() {
@@ -70,6 +70,11 @@ install_dependencies() {
 # 配置Fail2ban
 configure_fail2ban() {
     local ssh_port=$1
+    local bantime=$2
+    local findtime=$3
+    local maxretry=$4
+    local whitelist=$5
+    
     echo -e "${BLUE}正在配置Fail2ban...${NC}"
     
     # 创建配置目录（如果不存在）
@@ -84,22 +89,22 @@ configure_fail2ban() {
     cat > /etc/fail2ban/jail.local << EOF
 [DEFAULT]
 # 封禁时间（秒）
-bantime = 3600
+bantime = $bantime
 # 检测时间范围（秒）
-findtime = 600
+findtime = $findtime
 # 最大尝试次数
-maxretry = 3
+maxretry = $maxretry
 # 解封IP
-unbantime = 3600
+unbantime = $bantime
 # 忽略本地网络
-ignoreip = 127.0.0.1/8 ::1
+ignoreip = 127.0.0.1/8 ::1 $whitelist
 
 [sshd]
 enabled = true
 port = $ssh_port
 filter = sshd
 logpath = %(sshd_log)s
-maxretry = 3
+maxretry = $maxretry
 EOF
 
     # 根据不同系统配置日志路径
@@ -119,9 +124,17 @@ EOF
     echo -e "${GREEN}Fail2ban配置完成！${NC}"
     echo -e "${GREEN}当前配置：${NC}"
     echo -e "SSH端口: ${YELLOW}$ssh_port${NC}"
-    echo -e "最大尝试次数: ${YELLOW}3${NC}"
-    echo -e "封禁时间: ${YELLOW}1小时${NC}"
-    echo -e "检测时间范围: ${YELLOW}10分钟${NC}"
+    echo -e "最大尝试次数: ${YELLOW}$maxretry${NC}"
+    echo -e "封禁时间: ${YELLOW}$(($bantime/3600))小时${NC}"
+    echo -e "检测时间范围: ${YELLOW}$(($findtime/60))分钟${NC}"
+    echo -e "白名单IP: ${YELLOW}$whitelist${NC}"
+}
+
+# 手动封禁IP
+ban_ip() {
+    local ip=$1
+    fail2ban-client set sshd banip $ip
+    echo -e "${GREEN}已封禁IP: $ip${NC}"
 }
 
 # 显示状态
@@ -132,41 +145,71 @@ show_status() {
     fail2ban-client status sshd
 }
 
+# 自定义配置菜单
+custom_config_menu() {
+    local detected_port=$(detect_ssh_port)
+    echo -e "${YELLOW}检测到当前SSH端口为: $detected_port${NC}"
+    read -p "是否使用此端口配置Fail2ban？[Y/n]: " confirm
+    if [[ $confirm =~ ^[Nn]$ ]]; then
+        read -p "请输入新的SSH端口: " new_port
+        ssh_port=$new_port
+    else
+        ssh_port=$detected_port
+    fi
+
+    read -p "请输入封禁时间（小时，默认1小时）: " ban_hours
+    ban_hours=${ban_hours:-1}
+    bantime=$((ban_hours * 3600))
+
+    read -p "请输入检测时间范围（分钟，默认10分钟）: " find_minutes
+    find_minutes=${find_minutes:-10}
+    findtime=$((find_minutes * 60))
+
+    read -p "请输入最大尝试次数（默认3次）: " max_retry
+    maxretry=${max_retry:-3}
+
+    read -p "请输入白名单IP（多个IP用空格分隔，直接回车跳过）: " whitelist
+    whitelist=${whitelist:-""}
+
+    install_dependencies
+    configure_fail2ban "$ssh_port" "$bantime" "$findtime" "$maxretry" "$whitelist"
+}
+
 # 主菜单
 main_menu() {
     while true; do
         echo -e "\n${GREEN}=== Fail2ban 管理脚本 v${VERSION} ===${NC}"
         echo -e "${BLUE}1. 安装/重新配置 Fail2ban${NC}"
-        echo -e "${BLUE}2. 查看Fail2ban状态${NC}"
-        echo -e "${BLUE}3. 解封指定IP${NC}"
-        echo -e "${BLUE}4. 查看封禁日志${NC}"
+        echo -e "${BLUE}2. 自定义配置 Fail2ban${NC}"
+        echo -e "${BLUE}3. 查看Fail2ban状态${NC}"
+        echo -e "${BLUE}4. 解封指定IP${NC}"
+        echo -e "${BLUE}5. 手动封禁IP${NC}"
+        echo -e "${BLUE}6. 查看封禁日志${NC}"
         echo -e "${BLUE}0. 退出${NC}"
         
-        read -p "请选择操作 [0-4]: " choice
+        read -p "请选择操作 [0-6]: " choice
         
         case $choice in
             1)
-                local detected_port=$(detect_ssh_port)
-                echo -e "${YELLOW}检测到当前SSH端口为: $detected_port${NC}"
-                read -p "是否使用此端口配置Fail2ban？[Y/n]: " confirm
-                if [[ $confirm =~ ^[Nn]$ ]]; then
-                    read -p "请输入新的SSH端口: " new_port
-                    ssh_port=$new_port
-                else
-                    ssh_port=$detected_port
-                fi
                 install_dependencies
-                configure_fail2ban $ssh_port
+                configure_fail2ban "$(detect_ssh_port)" "3600" "600" "3" ""
                 ;;
             2)
-                show_status
+                custom_config_menu
                 ;;
             3)
+                show_status
+                ;;
+            4)
                 read -p "请输入要解封的IP: " ip
                 fail2ban-client set sshd unbanip $ip
                 echo -e "${GREEN}已解封IP: $ip${NC}"
                 ;;
-            4)
+            5)
+                read -p "请输入要封禁的IP: " ip
+                ban_ip $ip
+                ;;
+            6)
                 case $OS in
                     debian|ubuntu)
                         tail -n 50 /var/log/fail2ban.log
