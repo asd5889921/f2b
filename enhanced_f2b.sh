@@ -94,7 +94,12 @@ install_dependencies() {
         # Debian 12 需要特殊处理
         if [ "$OS" = "debian" ] && [ "$VERSION_ID" = "12" ]; then
             $PKG_UPDATE
-            $PKG_INSTALL fail2ban python3 python3-systemd iptables nftables || handle_error "安装失败"
+            # 安装必需的依赖
+            $PKG_INSTALL fail2ban python3 python3-systemd iptables rsyslog || handle_error "安装失败"
+            
+            # 确保rsyslog服务启动并开机自启
+            systemctl enable rsyslog
+            systemctl start rsyslog
         else
             $PKG_UPDATE
             $PKG_INSTALL fail2ban iptables || handle_error "安装失败"
@@ -203,7 +208,7 @@ unbantime = 3600
 # 忽略IP
 ignoreip = 127.0.0.1/8 ::1
 
-# Debian 12 特殊配置
+# 使用rsyslog作为后端
 backend = systemd
 
 # 动作设置
@@ -402,7 +407,31 @@ install_fail2ban() {
 show_status() {
     clear
     echo -e "${GREEN}=== Fail2ban 状态 ===${NC}"
+    
+    # 检查服务运行状态
+    if systemctl is-active fail2ban >/dev/null 2>&1; then
+        echo -e "${GREEN}● Fail2ban 服务状态: 正在运行${NC}"
+    else
+        echo -e "${RED}○ Fail2ban 服务状态: 未运行${NC}"
+    fi
+    
+    # 检查是否开机自启
+    if systemctl is-enabled fail2ban >/dev/null 2>&1; then
+        echo -e "${GREEN}● 开机自启: 已启用${NC}"
+    else
+        echo -e "${YELLOW}○ 开机自启: 未启用${NC}"
+    fi
+    
+    # 显示运行时间
+    echo -e "\n${BLUE}运行时间:${NC}"
+    systemctl status fail2ban | grep "Active:" | sed 's/Active:/运行时长:/' || echo -e "${RED}无法获取运行时间${NC}"
+    
+    echo -e "\n${BLUE}监狱状态:${NC}"
     fail2ban-client status
+    
+    echo -e "\n${BLUE}详细信息:${NC}"
+    fail2ban-client status sshd | grep "Currently banned:" || echo -e "${YELLOW}当前没有被封禁的IP${NC}"
+    
     echo -e "\n${YELLOW}按回车键返回主菜单${NC}"
     read
 }
@@ -411,7 +440,23 @@ show_status() {
 show_banned() {
     clear
     echo -e "${GREEN}=== 当前封禁IP列表 ===${NC}"
-    fail2ban-client status sshd
+    
+    if systemctl is-active fail2ban >/dev/null 2>&1; then
+        echo -e "${GREEN}● 服务状态: 正在运行${NC}\n"
+        
+        # 获取封禁信息
+        banned_info=$(fail2ban-client status sshd)
+        if echo "$banned_info" | grep -q "Currently banned:.*[1-9]"; then
+            echo -e "${BLUE}封禁详情:${NC}"
+            echo "$banned_info"
+        else
+            echo -e "${YELLOW}目前没有被封禁的IP${NC}"
+        fi
+    else
+        echo -e "${RED}○ 服务状态: 未运行${NC}"
+        echo -e "${RED}请先启动Fail2ban服务${NC}"
+    fi
+    
     echo -e "\n${YELLOW}按回车键返回主菜单${NC}"
     read
 }
